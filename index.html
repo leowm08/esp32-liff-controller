@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ESP32 音光控制台</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS 變數定義主題顏色 */
+        :root {
+            --primary: #00ff9d; /* 駭客綠 (主色調) */
+            --bg: #121212;      /* 深色背景 */
+            --card: #1e1e1e;    /* 卡片背景 */
+            --text: #ffffff;    /* 文字顏色 */
+        }
+
+        /* 全局樣式設定 */
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Roboto Mono', monospace; /* 使用科技感等寬字體 */
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* 標題區樣式 */
+        header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        h2 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; }
+        .status { font-size: 0.8rem; color: var(--primary); display: flex; align-items: center;}
+        .status::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--primary); border-radius: 50%; margin-right: 5px; box-shadow: 0 0 5px var(--primary); }
+
+        /* 卡片容器通用樣式 */
+        .control-group {
+            background: var(--card);
+            width: 100%;
+            max-width: 400px; /* 限制最大寬度，大螢幕更好看 */
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+        }
+
+        /* 標籤樣式 */
+        label { display: block; margin-bottom: 10px; font-size: 0.9rem; color: #aaa; letter-spacing: 0.5px; }
+
+        /* --- 1. 模式切換開關 (Toggle Switch) --- */
+        .mode-switch {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #modeText { font-weight: bold; color: var(--primary); }
+        
+        /* 開關本體 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        /* 隱藏原始 checkbox */
+        .switch input { opacity: 0; width: 0; height: 0; }
+        /* 滑塊軌道 */
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #555;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        /* 滑塊圓鈕 */
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        /* 選中狀態：軌道變色 */
+        input:checked + .slider { background-color: var(--primary); box-shadow: 0 0 10px var(--primary); }
+        /* 選中狀態：圓鈕移動 */
+        input:checked + .slider:before { transform: translateX(30px); }
+
+        /* --- 2. 顏色選擇器 (自定義樣式) --- */
+        input[type="color"] {
+            -webkit-appearance: none; /* 移除預設樣式 */
+            border: none;
+            width: 100%;
+            height: 50px;
+            border-radius: 10px;
+            cursor: pointer;
+            background: none; /* 背景透明 */
+        }
+        /* 色塊外框 */
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        /* 色塊本體 */
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 10px; border: 2px solid #555; }
+
+        /* --- 3. 亮度滑桿 (Range Slider) --- */
+        input[type=range] {
+            width: 100%;
+            margin: 15px 0;
+            background: transparent;
+            -webkit-appearance: none; /* 移除預設樣式 */
+        }
+        input[type=range]:focus { outline: none; }
+        
+        /* 滑桿軌道 */
+        input[type=range]::-webkit-slider-runnable-track {
+            background: #333;
+            border-radius: 5px;
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+        }
+        /* 滑桿拖曳鈕 (Thumb) */
+        input[type=range]::-webkit-slider-thumb {
+            margin-top: -6px; /* 垂直居中 */
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            -webkit-appearance: none;
+            box-shadow: 0 0 10px var(--primary); /* 發光效果 */
+        }
+
+        /* 底部按鈕 */
+        .btn-apply {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px;
+            background: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.3s;
+            font-family: 'Roboto Mono', monospace;
+            font-weight: bold;
+            margin-top: auto; /* 推到底部 */
+        }
+        .btn-apply:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 15px var(--primary); }
+        
+        /* 數值顯示 */
+        .value-display { float: right; color: var(--primary); font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>SYSTEM CONTROL</h2>
+        <span class="status">ONLINE</span>
+    </header>
+
+    <div class="control-group">
+        <div class="mode-switch">
+            <div>
+                <label>OPERATING MODE</label>
+                <span id="modeText">Music Sync</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="modeToggle" onclick="toggleMode()">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label>AMBIENT COLOR</label>
+        <input type="color" id="colorPicker" value="#00ff9d" onchange="updateColor()">
+    </div>
+
+    <div class="control-group">
+        <label>INTENSITY <span id="brightVal" class="value-display">50%</span></label>
+        <input type="range" id="brightSlider" min="0" max="255" value="128" oninput="updateBrightUI()" onchange="sendBrightness()">
+    </div>
+
+    <button class="btn-apply" onclick="closeApp()">EXIT CONSOLE</button>
+
+    <script>
+        // =============== 配置區 ===============
+        // ★ 【重要】請在此填入您的 LIFF ID
+        const LIFF_ID = "您的_LIFF_ID"; 
+        // =====================================
+
+        // 初始化 LIFF
+        window.onload = function() {
+            liff.init({ liffId: LIFF_ID })
+                .then(() => {
+                    // 如果使用者未登入 LINE，提示登入
+                    if (!liff.isLoggedIn()) {
+                        liff.login();
+                    }
+                })
+                .catch(err => {
+                    console.error('LIFF 初始化失敗:', err);
+                    alert('LIFF 初始化失敗，請檢查 LIFF ID 設定。');
+                });
+        };
+
+        // --- 功能函式 ---
+
+        // 1. 切換模式 (Toggle)
+        function toggleMode() {
+            // 取得開關狀態 (true = Lamp Mode, false = Music Sync)
+            let isLamp = document.getElementById("modeToggle").checked;
+            // 更新介面文字
+            document.getElementById("modeText").innerText = isLamp ? "Lamp Mode" : "Music Sync";
+            
+            // 發送指令：這裡我們發送 "模式切換" 文字，讓 GAS 判斷並轉為 'M' 指令
+            sendMessage("模式切換");
+        }
+
+        // 2. 更新顏色 (Color Picker)
+        function updateColor() {
+            // 取得選取的 HEX 色碼 (例如 #ff0000)
+            let color = document.getElementById("colorPicker").value;
+            
+            // UX 優化：如果使用者在「音樂模式」下選顏色，自動幫他切換到「檯燈模式」的 UI 狀態
+            if(!document.getElementById("modeToggle").checked) {
+                document.getElementById("modeToggle").checked = true;
+                document.getElementById("modeText").innerText = "Lamp Mode";
+            }
+            
+            // 發送指令：格式為 "Color:#RRGGBB"
+            sendMessage("Color:" + color);
+        }
+
+        // 3. 更新亮度 UI 顯示 (Slider 拖曳時即時更新)
+        function updateBrightUI() {
+            let val = document.getElementById("brightSlider").value;
+            // 將 0-255 轉換為 0-100%
+            let percent = Math.round((val / 255) * 100);
+            document.getElementById("brightVal").innerText = percent + "%";
+        }
+
+        // 4. 發送亮度指令 (Slider 放開時觸發)
+        function sendBrightness() {
+            let val = document.getElementById("brightSlider").value;
+            // 發送指令：格式為 "B:數值" (例如 B:128)
+            sendMessage("B:" + val);
+        }
+
+        // --- 通用工具函式 ---
+
+        // 透過 LINE 傳送文字訊息
+        function sendMessage(text) {
+            // 確認是否在 LINE App 內開啟
+            if (liff.isInClient()) {
+                liff.sendMessages([{
+                    'type': 'text',
+                    'text': text
+                }]).then(function() {
+                    console.log('訊息發送成功:', text);
+                }).catch(function(error) {
+                    console.error('訊息發送失敗:', error);
+                    alert('指令發送失敗，請重試。');
+                });
+            } else {
+                alert('此功能僅能在 LINE App 內使用。');
+            }
+        }
+
+        // 關閉 LIFF 視窗
+        function closeApp() {
+            if (liff.isInClient()) {
+                liff.closeWindow();
+            } else {
+                window.close();
+            }
+        }
+    </script>
+</body>
+</html>
