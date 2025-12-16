@@ -230,7 +230,7 @@
             document.getElementById("modeText").innerText = isLamp ? "Lamp Mode" : "Music Sync";
             
             // 發送指令：這裡我們發送 "模式切換" 文字，讓 GAS 判斷並轉為 'M' 指令
-            sendMessage("模式切換");
+            sendMessage("CMD_MODE");
         }
 
         // 2. 更新顏色 (Color Picker)
